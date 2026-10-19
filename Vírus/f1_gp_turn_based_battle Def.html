@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 GP RPG Turn-Based Battle</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        f1red: '#E10600',
+                        f1dark: '#0B0E14',
+                        f1card: '#151922',
+                        f1border: '#2A303C',
+                        f1accent: '#FF1801',
+                    },
+                    fontFamily: {
+                        sans: ['Titillium Web', 'Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Titillium+Web:ital,wght@0,400;0,600;0,700;1,600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Titillium Web', sans-serif;
+            background-color: #07090e;
+            color: #f1f5f9;
+            user-select: none;
+            overflow-x: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Carbon Fiber Texture */
+        .bg-carbon {
+            background-color: #0d0f14;
+            background-image: 
+                radial-gradient(rgba(255, 255, 255, 0.05) 2px, transparent 0),
+                radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 0);
+            background-size: 20px 20px, 10px 10px;
+            background-position: 0 0, 5px 5px;
+        }
+        /* Track Kerb Gradient */
+        .kerb-pattern {
+            background: repeating-linear-gradient(
+                135deg,
+                #e10600,
+                #e10600 15px,
+                #ffffff 15px,
+                #ffffff 30px
+            );
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0d0f14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2a303c;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #e10600;
+        }
+        /* Animations */
+        @keyframes pulse-light {
+            0%, 100% { opacity: 0.3; transform: scale(0.95); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+        .animate-pulse-light {
+            animation: pulse-light 1.5s infinite ease-in-out;
+        }
+        @keyframes damage-pop {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            50% { transform: translateY(-25px) scale(1.3); }
+            100% { opacity: 0; transform: translateY(-40px) scale(0.9); }
+        }
+        .damage-popup {
+            position: absolute;
+            animation: damage-pop 1s forwards ease-out;
+            pointer-events: none;
+            z-index: 50;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+        }
+        /* Screen Shake */
+        .shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+        /* Start Lights */
+        .light-off { background-color: #1a1e26; box-shadow: inset 0 0 10px #000; }
+        .light-on { background-color: #ff0000; box-shadow: 0 0 20px #ff0000, 0 0 40px #ff0000; }
+        .light-go { background-color: #00ff66; box-shadow: 0 0 20px #00ff66, 0 0 40px #00ff66; }
+
+        /* F1 Steering Wheel Button Effect */
+        .f1-btn {
+            position: relative;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 0 0 rgba(0,0,0,0.5);
+        }
+        .f1-btn:active:not(:disabled) {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 0 rgba(0,0,0,0.5);
+        }
+        .f1-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.8);
+        }
+    </style>
+</head>
+<body class="bg-carbon min-h-screen text-slate-100 flex flex-col justify-between select-none">
+
+    <!-- HEADER / NAVIGATION -->
+    <header class="border-b border-f1border bg-black/60 backdrop-blur-md sticky top-0 z-40 px-4 py-2 flex items-center justify-between">
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="game.goHome()">
+            <div class="w-10 h-6 bg-f1red flex items-center justify-center font-orbitron font-extrabold text-white text-xs tracking-tighter rounded italic transform -skew-x-12 shadow-lg shadow-f1red/30">
+                F1 GP
+            </div>
+            <div>
+                <h1 class="font-orbitron font-bold text-lg leading-tight tracking-wider text-white">TURN-BASED COMBAT</h1>
+                <p class="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Official Drivers • Telemetry Engine v3.0</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center space-x-3">
+            <button id="btn-audio" onclick="audioManager.toggleMute()" class="px-3 py-1.5 rounded-lg border border-f1border bg-f1card hover:border-slate-400 text-xs font-semibold flex items-center space-x-2 transition">
+                <span id="audio-icon">🔊</span>
+                <span id="audio-text" class="hidden sm:inline">SOM: ON</span>
+            </button>
+            <button onclick="game.showRules()" class="px-3 py-1.5 rounded-lg border border-f1border bg-f1card hover:border-slate-400 text-xs font-semibold text-slate-300 transition">
+                ❓ Manual
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col justify-center">
+
+        <!-- SCREEN 1: START / MODE SELECTION -->
+        <section id="screen-start" class="flex flex-col items-center justify-center py-8 space-y-8 animate-fade-in">
+            <!-- Hero Banner -->
+            <div class="text-center space-y-4 max-w-2xl">
+                <div class="inline-block kerb-pattern p-1 rounded-xl shadow-2xl">
+                    <div class="bg-f1dark px-6 py-8 rounded-lg border border-slate-800">
+                        <span class="text-xs font-orbitron tracking-widest text-f1red font-bold uppercase bg-f1red/10 px-3 py-1 rounded-full border border-f1red/20">F1 World Championship RPG</span>
+                        <h2 class="text-4xl sm:text-6xl font-orbitron font-black italic tracking-tight text-white mt-3 uppercase">
+                            Lights Out &<br><span class="text-f1red">Away We Go!</span>
+                        </h2>
+                        <p class="text-sm text-slate-400 mt-3 max-w-md mx-auto">
+                            Escolha sua lenda ou promessa do grid da F1, gerencie seu ERS, troque de pneus e vença duelos estratégicos de pura velocidade e tática por turnos!
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mode Selector Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl w-full">
+                <!-- PvP Mode -->
+                <div onclick="game.startSelection('pvp')" class="group bg-f1card border-2 border-f1border hover:border-f1red rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-xl relative overflow-hidden">
+                    <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-f1red/10 rounded-full blur-2xl group-hover:bg-f1red/20 transition"></div>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-14 h-14 rounded-xl bg-f1red/20 border border-f1red/40 flex items-center justify-center text-3xl">
+                            ⚔️
+                        </div>
+                        <div>
+                            <span class="text-xs font-bold text-f1red uppercase tracking-widest">Multiplayer Local</span>
+                            <h3 class="text-2xl font-orbitron font-bold text-white">PvP 1 vs 1</h3>
+                            <p class="text-xs text-slate-400 mt-1">Desafie um amigo no mesmo teclado! Ambos escolhem seus pilotos para a grande corrida.</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex items-center justify-between text-xs font-bold text-f1red group-hover:translate-x-1 transition">
+                        <span>ENTRAR NA PISTA</span>
+                        <span>➔</span>
+                    </div>
+                </div>
+
+                <!-- PvE Mode -->
+                <div onclick="game.startSelection('pve')" class="group bg-f1card border-2 border-f1border hover:border-blue-500 rounded-2xl p-6 cursor-pointer transition-all duration-300 hover:scale-[1.02] shadow-xl relative overflow-hidden">
+                    <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition"></div>
+                    <div class="flex items-center space-x-4">
+                        <div class="w-14 h-14 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-3xl">
+                            🤖
+                        </div>
+                        <div>
+                            <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Treino Inteligente</span>
+                            <h3 class="text-2xl font-orbitron font-bold text-white">PvE vs IA</h3>
+                            <p class="text-xs text-slate-400 mt-1">Treine as mecânicas, cooldowns e sinergias contra uma IA simuladora de telemetria.</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex items-center justify-between text-xs font-bold text-blue-400 group-hover:translate-x-1 transition">
+                        <span>INICIAR TREINO</span>
+                        <span>➔</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- SCREEN 2: DRIVER SELECTION GRID -->
+        <section id="screen-select" class="hidden flex-col space-y-6">
+            <!-- Header Selection Status -->
+            <div class="bg-f1card p-4 rounded-xl border border-f1border flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h2 id="select-title" class="text-xl font-orbitron font-bold text-white">SELEÇÃO DE PILOTOS</h2>
+                    <p id="select-subtitle" class="text-xs text-slate-400">Jogador 1: Escolha o seu piloto do Grid</p>
+                </div>
+                
+                <!-- Filter Tabs -->
+                <div class="flex flex-wrap gap-2 text-xs">
+                    <button onclick="game.filterDrivers('all')" class="driver-filter-btn px-3 py-1.5 rounded-lg bg-f1red text-white font-semibold">Todos (23)</button>
+                    <button onclick="game.filterDrivers('legends')" class="driver-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">Lendas</button>
+                    <button onclick="game.filterDrivers('top')" class="driver-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">Equipes de Ponta</button>
+                    <button onclick="game.filterDrivers('young')" class="driver-filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">Jovens Talentos</button>
+                </div>
+            </div>
+
+            <!-- Driver Grid -->
+            <div id="drivers-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-[52vh] overflow-y-auto pr-1">
+                <!-- Driver Cards Injected via JS -->
+            </div>
+
+            <!-- Selection Preview Footer -->
+            <div class="bg-f1dark p-4 rounded-xl border border-f1border grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <!-- P1 Preview -->
+                <div id="p1-preview" class="flex items-center space-x-3 p-3 rounded-lg bg-f1card border border-f1border">
+                    <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center font-orbitron font-bold text-slate-500 text-lg border border-slate-700">P1</div>
+                    <div class="overflow-hidden">
+                        <span class="text-[10px] text-f1red font-bold uppercase">Piloto 1</span>
+                        <h4 class="font-orbitron font-bold text-white truncate text-sm">Selecione...</h4>
+                        <p class="text-[11px] text-slate-400 truncate">HP: 500 | ATK: --</p>
+                    </div>
+                </div>
+
+                <!-- VS Badge & Start Button -->
+                <div class="text-center flex flex-col items-center justify-center">
+                    <button id="btn-start-race" disabled onclick="game.confirmSelection()" class="w-full py-3 px-6 rounded-xl font-orbitron font-black text-sm uppercase tracking-wider bg-slate-800 text-slate-500 cursor-not-allowed transition shadow-lg">
+                        AGUARDANDO SELEÇÃO
+                    </button>
+                </div>
+
+                <!-- P2 Preview -->
+                <div id="p2-preview" class="flex items-center space-x-3 p-3 rounded-lg bg-f1card border border-f1border">
+                    <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center font-orbitron font-bold text-slate-500 text-lg border border-slate-700">P2</div>
+                    <div class="overflow-hidden">
+                        <span class="text-[10px] text-blue-400 font-bold uppercase">Piloto 2 / IA</span>
+                        <h4 class="font-orbitron font-bold text-white truncate text-sm">Aguardando P1...</h4>
+                        <p class="text-[11px] text-slate-400 truncate">HP: 500 | ATK: --</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- SCREEN 3: BATTLE ARENA -->
+        <section id="screen-battle" class="hidden flex-col space-y-4">
+            
+            <!-- Top Telemetry Header -->
+            <div class="bg-f1card px-4 py-2 rounded-xl border border-f1border flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-3">
+                    <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                    <span class="font-orbitron font-bold text-white tracking-widest uppercase">GP TELEMETRY LIVE</span>
+                </div>
+                <div class="flex items-center space-x-4 font-mono text-slate-400">
+                    <div>VOLTA: <span id="lap-counter" class="text-white font-bold">1/15</span></div>
+                    <div>TURNO: <span id="active-turn-indicator" class="text-f1red font-bold font-orbitron">--</span></div>
+                </div>
+                <button onclick="game.goHome()" class="text-slate-400 hover:text-white transition">Abandonar ✖</button>
+            </div>
+
+            <!-- Start Lights Overlay Banner -->
+            <div id="start-lights-box" class="bg-black/90 p-4 rounded-xl border border-f1border flex flex-col items-center justify-center space-y-3 shadow-2xl">
+                <div id="lights-row" class="flex space-x-4">
+                    <div class="w-6 h-6 rounded-full light-off border border-slate-700"></div>
+                    <div class="w-6 h-6 rounded-full light-off border border-slate-700"></div>
+                    <div class="w-6 h-6 rounded-full light-off border border-slate-700"></div>
+                    <div class="w-6 h-6 rounded-full light-off border border-slate-700"></div>
+                    <div class="w-6 h-6 rounded-full light-off border border-slate-700"></div>
+                </div>
+                <div id="start-lights-text" class="font-orbitron font-black text-sm text-yellow-400 uppercase tracking-widest">
+                    PREPAREM SEUS MOTORES...
+                </div>
+            </div>
+
+            <!-- Cockpit Dueling Arena Grid -->
+            <div id="battle-arena" class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+                
+                <!-- P1 COCKPIT CARD (Left) -->
+                <div id="p1-cockpit" class="lg:col-span-4 bg-f1card rounded-2xl p-4 border-2 border-f1border relative flex flex-col justify-between overflow-hidden shadow-2xl transition-all">
+                    <!-- Team Color Banner Accent -->
+                    <div id="p1-accent-bar" class="absolute top-0 left-0 right-0 h-1.5 bg-f1red"></div>
+                    
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-[10px] font-bold text-f1red uppercase tracking-wider">PILOTO 1</span>
+                                <h3 id="p1-name" class="font-orbitron font-black text-xl text-white">LECLERC</h3>
+                                <p id="p1-team" class="text-xs text-slate-400">Scuderia Ferrari #16</p>
+                            </div>
+                            <div id="p1-avatar-box" class="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden p-1">
+                                <!-- SVG Avatar -->
+                            </div>
+                        </div>
+
+                        <!-- HP Bar -->
+                        <div class="space-y-1 my-3">
+                            <div class="flex justify-between text-xs font-mono font-bold">
+                                <span class="text-slate-300">VIDA INTEGRAL</span>
+                                <span id="p1-hp-text" class="text-emerald-400">500 / 500</span>
+                            </div>
+                            <div class="w-full h-4 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p1-hp-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 100%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Shield / Armor Bar -->
+                        <div class="space-y-1 my-2">
+                            <div class="flex justify-between text-[11px] font-mono">
+                                <span class="text-slate-400">ESCUDO TÁTICO</span>
+                                <span id="p1-shield-text" class="text-cyan-400">0 SHIELD</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p1-shield-bar" class="h-full bg-cyan-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- ERS Gauge -->
+                        <div class="space-y-1 my-2">
+                            <div class="flex justify-between text-[11px] font-mono">
+                                <span class="text-yellow-400 font-bold">ENERGIA ERS</span>
+                                <span id="p1-ers-text" class="text-yellow-400 font-bold">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p1-ers-bar" class="h-full bg-yellow-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Active Status Badges -->
+                        <div id="p1-status-container" class="flex flex-wrap gap-1 mt-3 min-h-[24px]">
+                            <!-- Status Badges -->
+                        </div>
+                    </div>
+
+                    <!-- Stat summary -->
+                    <div class="grid grid-cols-3 gap-1 pt-3 border-t border-slate-800 text-center text-[10px] font-mono text-slate-400">
+                        <div>ATK: <b id="p1-stat-atk" class="text-white">50</b></div>
+                        <div>DEF: <b id="p1-stat-def" class="text-white">20%</b></div>
+                        <div>INI: <b id="p1-stat-ini" class="text-white">70</b></div>
+                    </div>
+                </div>
+
+
+                <!-- TELEMETRY & RADIO LOG (Center) -->
+                <div class="lg:col-span-4 bg-f1dark rounded-2xl p-4 border border-f1border flex flex-col justify-between h-[360px] lg:h-auto shadow-xl">
+                    <div class="border-b border-f1border pb-2 flex justify-between items-center">
+                        <span class="text-xs font-orbitron font-bold text-slate-300">📻 RÁDIO DA EQUIPE & TELEMETRIA</span>
+                        <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">LIVE LOG</span>
+                    </div>
+
+                    <!-- Scrollable Log Box -->
+                    <div id="telemetry-log" class="flex-1 my-2 overflow-y-auto space-y-2 pr-1 text-xs font-mono">
+                        <div class="p-2 rounded bg-slate-900/60 border border-slate-800 text-slate-400">
+                            🏁 Aguardando luzes vermelhas para início do GP...
+                        </div>
+                    </div>
+
+                    <div class="text-[10px] text-slate-500 text-center border-t border-f1border pt-2">
+                        Utilize os botões do volante para executar ordens de equipe.
+                    </div>
+                </div>
+
+
+                <!-- P2 COCKPIT CARD (Right) -->
+                <div id="p2-cockpit" class="lg:col-span-4 bg-f1card rounded-2xl p-4 border-2 border-f1border relative flex flex-col justify-between overflow-hidden shadow-2xl transition-all">
+                    <!-- Team Color Banner Accent -->
+                    <div id="p2-accent-bar" class="absolute top-0 left-0 right-0 h-1.5 bg-blue-500"></div>
+
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+                            <div>
+                                <span class="text-[10px] font-bold text-blue-400 uppercase tracking-wider">PILOTO 2</span>
+                                <h3 id="p2-name" class="font-orbitron font-black text-xl text-white">VERSTAPPEN</h3>
+                                <p id="p2-team" class="text-xs text-slate-400">Red Bull Racing #1</p>
+                            </div>
+                            <div id="p2-avatar-box" class="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden p-1">
+                                <!-- SVG Avatar -->
+                            </div>
+                        </div>
+
+                        <!-- HP Bar -->
+                        <div class="space-y-1 my-3">
+                            <div class="flex justify-between text-xs font-mono font-bold">
+                                <span class="text-slate-300">VIDA INTEGRAL</span>
+                                <span id="p2-hp-text" class="text-emerald-400">500 / 500</span>
+                            </div>
+                            <div class="w-full h-4 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p2-hp-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width: 100%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Shield / Armor Bar -->
+                        <div class="space-y-1 my-2">
+                            <div class="flex justify-between text-[11px] font-mono">
+                                <span class="text-slate-400">ESCUDO TÁTICO</span>
+                                <span id="p2-shield-text" class="text-cyan-400">0 SHIELD</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p2-shield-bar" class="h-full bg-cyan-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- ERS Gauge -->
+                        <div class="space-y-1 my-2">
+                            <div class="flex justify-between text-[11px] font-mono">
+                                <span class="text-yellow-400 font-bold">ENERGIA ERS</span>
+                                <span id="p2-ers-text" class="text-yellow-400 font-bold">0%</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div id="p2-ers-bar" class="h-full bg-yellow-400 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- Active Status Badges -->
+                        <div id="p2-status-container" class="flex flex-wrap gap-1 mt-3 min-h-[24px]">
+                            <!-- Status Badges -->
+                        </div>
+                    </div>
+
+                    <!-- Stat summary -->
+                    <div class="grid grid-cols-3 gap-1 pt-3 border-t border-slate-800 text-center text-[10px] font-mono text-slate-400">
+                        <div>ATK: <b id="p2-stat-atk" class="text-white">55</b></div>
+                        <div>DEF: <b id="p2-stat-def" class="text-white">18%</b></div>
+                        <div>INI: <b id="p2-stat-ini" class="text-white">75</b></div>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- STEERING WHEEL COMMAND PANEL (ATTACKS) -->
+            <div id="action-panel" class="bg-f1card p-4 rounded-2xl border border-f1border shadow-2xl space-y-3">
+                <div class="flex justify-between items-center text-xs border-b border-slate-800 pb-2">
+                    <span id="turn-action-prompt" class="font-orbitron font-bold text-f1red uppercase tracking-wider">
+                        ⚡ SEU TURNO: ESCOLHA A MANOBRA TÁTICA
+                    </span>
+                    <span class="text-slate-400 font-mono">Painel de Comandos do Cockpit</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <!-- Attack 1: Basic Direct Strike -->
+                    <button id="btn-atk-1" onclick="game.executeAttack(0)" class="f1-btn bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-3 text-left transition flex flex-col justify-between group">
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-mono uppercase bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Ataque Básico 1</span>
+                                <span class="text-xs font-bold text-emerald-400">+25 ERS</span>
+                            </div>
+                            <h4 id="atk-1-title" class="font-orbitron font-bold text-white text-sm group-hover:text-f1red transition">Ataque Direto</h4>
+                            <p id="atk-1-desc" class="text-[11px] text-slate-400 mt-1 line-clamp-2">Golpe direto rápido e sem tempo de recarga.</p>
+                        </div>
+                        <div class="mt-2 text-[10px] font-mono text-slate-500 flex justify-between">
+                            <span>CD: Pronto</span>
+                            <span>Dano Base</span>
+                        </div>
+                    </button>
+
+                    <!-- Attack 2: Basic Tactical Strike -->
+                    <button id="btn-atk-2" onclick="game.executeAttack(1)" class="f1-btn bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-3 text-left transition flex flex-col justify-between group">
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-mono uppercase bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Ataque Básico 2</span>
+                                <span id="atk-2-cd" class="text-xs font-bold text-slate-400">CD: 1T</span>
+                            </div>
+                            <h4 id="atk-2-title" class="font-orbitron font-bold text-white text-sm group-hover:text-yellow-400 transition">Vácuo / Slipstream</h4>
+                            <p id="atk-2-desc" class="text-[11px] text-slate-400 mt-1 line-clamp-2">Aproveita a turbulência para reduzir defesa inimiga.</p>
+                        </div>
+                        <div class="mt-2 text-[10px] font-mono text-slate-500 flex justify-between">
+                            <span>Efeito Tático</span>
+                            <span>Debuff</span>
+                        </div>
+                    </button>
+
+                    <!-- Attack 3: Alternative Support/Defense -->
+                    <button id="btn-atk-3" onclick="game.executeAttack(2)" class="f1-btn bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl p-3 text-left transition flex flex-col justify-between group">
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-mono uppercase bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Ataque Alternativo</span>
+                                <span id="atk-3-cd" class="text-xs font-bold text-slate-400">CD: 2T</span>
+                            </div>
+                            <h4 id="atk-3-title" class="font-orbitron font-bold text-white text-sm group-hover:text-cyan-400 transition">Pit Stop de 2.0s</h4>
+                            <p id="atk-3-desc" class="text-[11px] text-slate-400 mt-1 line-clamp-2">Troca pneus, recupera HP e ativa Escudo de Proteção.</p>
+                        </div>
+                        <div class="mt-2 text-[10px] font-mono text-slate-500 flex justify-between">
+                            <span>Suporte / Cura</span>
+                            <span>Escudo</span>
+                        </div>
+                    </button>
+
+                    <!-- Attack 4: Special Ultimate -->
+                    <button id="btn-atk-4" onclick="game.executeAttack(3)" class="f1-btn bg-slate-800 hover:bg-slate-700 border border-f1red/50 rounded-xl p-3 text-left transition flex flex-col justify-between group relative overflow-hidden">
+                        <div class="absolute -right-4 -bottom-4 w-16 h-16 bg-f1red/10 rounded-full blur-xl"></div>
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-mono uppercase bg-f1red/20 text-f1red px-2 py-0.5 rounded border border-f1red/40 font-bold">ESPECIAL SUPREMO</span>
+                                <span id="atk-4-cd" class="text-xs font-bold text-f1red">CD: 3T</span>
+                            </div>
+                            <h4 id="atk-4-title" class="font-orbitron font-black text-white text-sm group-hover:text-f1red transition">Pole Position Perfect</h4>
+                            <p id="atk-4-desc" class="text-[11px] text-slate-400 mt-1 line-clamp-2">Habilidade máxima de alto dano e impacto visual.</p>
+                        </div>
+                        <div class="mt-2 text-[10px] font-mono text-f1red flex justify-between font-bold">
+                            <span>Alta Potência</span>
+                            <span>Dano Massivo</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- SCREEN 4: PODIUM & VICTORY -->
+        <section id="screen-podium" class="hidden flex-col items-center justify-center py-6 space-y-6">
+            <div class="bg-f1card border-2 border-f1border rounded-2xl p-8 max-w-2xl w-full text-center space-y-6 shadow-2xl relative overflow-hidden">
+                <div class="absolute inset-0 kerb-pattern opacity-10 pointer-events-none"></div>
+
+                <!-- Trophy Icon -->
+                <div class="w-24 h-24 mx-auto rounded-full bg-yellow-500/20 border-2 border-yellow-400 flex items-center justify-center text-5xl shadow-xl shadow-yellow-500/20 animate-bounce">
+                    🏆
+                </div>
+
+                <div>
+                    <span class="text-xs font-orbitron font-bold text-yellow-400 uppercase tracking-widest">BANDEIRA QUADRICULADA</span>
+                    <h2 id="winner-name" class="text-3xl sm:text-5xl font-orbitron font-black italic text-white mt-1">C. LECLERC VENCEU!</h2>
+                    <p id="winner-team" class="text-sm text-slate-400 mt-1">Scuderia Ferrari • Grande Prêmio rpg</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-f1dark p-4 rounded-xl border border-slate-800 text-xs font-mono">
+                    <div>
+                        <span class="text-slate-500 block">VOLTAS</span>
+                        <b id="stat-laps" class="text-white text-base font-orbitron">12</b>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block">DANO TOTAL</span>
+                        <b id="stat-damage" class="text-emerald-400 text-base font-orbitron">620</b>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block">ACERTOS CRÍTICOS</span>
+                        <b id="stat-crits" class="text-yellow-400 text-base font-orbitron">4</b>
+                    </div>
+                    <div>
+                        <span class="text-slate-500 block">PIT STOPS</span>
+                        <b id="stat-pits" class="text-cyan-400 text-base font-orbitron">2</b>
+                    </div>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                    <button onclick="game.rematch()" class="flex-1 py-3 px-6 rounded-xl font-orbitron font-bold text-sm bg-f1red hover:bg-red-700 text-white transition shadow-lg shadow-f1red/30">
+                        🔄 REVANCHE RÁPIDA
+                    </button>
+                    <button onclick="game.startSelection(game.mode)" class="flex-1 py-3 px-6 rounded-xl font-orbitron font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 transition">
+                        🏎️ TROCAR PILOTOS
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+
+    <!-- MANUAL MODAL -->
+    <div id="modal-rules" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-f1card border border-f1border rounded-2xl p-6 max-w-lg w-full space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="font-orbitron font-bold text-lg text-white">MANUAL DE CORRIDA & REGRAS</h3>
+                <button onclick="game.hideRules()" class="text-slate-400 hover:text-white text-xl">✖</button>
+            </div>
+            <div class="text-xs text-slate-300 space-y-3 font-sans leading-relaxed max-h-[60vh] overflow-y-auto pr-1">
+                <p><b>1. Atributos Base:</b> Todos os 23 pilotos iniciam com exatamente <b>500 HP</b>. Dano, Defesa e Iniciativa dependem da telemetria de cada um.</p>
+                <p><b>2. Sistema de Turnos:</b> O piloto com maior <b>Iniciativa</b> ataca primeiro. A cada turno, você seleciona 1 dos 4 movimentos.</p>
+                <p><b>3. Bateria ERS:</b> Cada Ataque Básico 1 concede +25 de ERS. Ao atingir 100%, seu próximo ataque causará dano extra ou crítico!</p>
+                <p><b>4. Cooldowns:</b> Ataque Básico 2 (1 turno), Ataque Alternativo (2 turnos) e Especial Supremo (3 turnos).</p>
+                <p><b>5. Escudo de Pit Stop:</b> Use a habilidade alternativamente para regenerar vida e ativar proteção tática de chassi.</p>
+            </div>
+            <button onclick="game.hideRules()" class="w-full py-2.5 rounded-xl bg-f1red text-white font-orbitron font-bold text-xs uppercase">
+                ENTENDIDO, VOLTAR AO GRID
+            </button>
+        </div>
+    </div>
+
+
+    <!-- FOOTER -->
+    <footer class="border-t border-f1border bg-black/60 px-4 py-2 text-center text-[11px] text-slate-500 font-mono">
+        F1 GP RPG Turn-Based Game • Desenvolvido com HTML, CSS Tailwind & Vanilla JS • 23 Pilotos Oficiais
+    </footer>
+
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        /* ==========================================================================
+           1. AUDIO SYNTHESIZER MANAGER (Web Audio API - No External Files)
+           ========================================================================== */
+        class AudioSynth {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+            }
+
+            toggleMute() {
+                this.muted = !this.muted;
+                document.getElementById('audio-icon').innerText = this.muted ? '🔇' : '🔊';
+                document.getElementById('audio-text').innerText = this.muted ? 'SOM: OFF' : 'SOM: ON';
+            }
+
+            playBeep(freq = 440, type = 'sine', duration = 0.15, volume = 0.1) {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+
+            playStartLightBeep(isGo = false) {
+                if (isGo) {
+                    this.playBeep(880, 'triangle', 0.5, 0.25);
+                } else {
+                    this.playBeep(440, 'sine', 0.2, 0.15);
+                }
+            }
+
+            playEngineRev() {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.4);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.45);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.45);
+                } catch (e) {}
+            }
+
+            playImpact(isCrit = false) {
+                if (this.muted) return;
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = isCrit ? 'square' : 'triangle';
+                    osc.frequency.setValueAtTime(isCrit ? 150 : 100, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(isCrit ? 0.3 : 0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.3);
+                } catch (e) {}
+            }
+
+            playPitStop() {
+                this.playBeep(600, 'square', 0.1, 0.1);
+                setTimeout(() => this.playBeep(900, 'square', 0.15, 0.1), 120);
+            }
+
+            playVictory() {
+                if (this.muted) return;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((note, idx) => {
+                    setTimeout(() => this.playBeep(note, 'triangle', 0.3, 0.2), idx * 150);
+                });
+            }
+        }
+
+        const audioManager = new AudioSynth();
+
+
+        /* ==========================================================================
+           2. ALL 23 DRIVERS DATABASE
+           ========================================================================== */
+        const DRIVERS_DATA = [
+            {
+                id: 'leclerc',
+                name: 'C. Leclerc',
+                number: '16',
+                team: 'Ferrari',
+                color: '#E8002D',
+                category: 'top',
+                quote: 'Pole position and ready to attack!',
+                atk: 54, def: 18, ini: 78, crit: 22,
+                moves: [
+                    { name: 'Ataque Direto Quantico', desc: 'Aceleracao direta nas retas de Monza.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Curva Apex Trava', desc: 'Trava forte no limite reduzindo a defesa inimiga.', cd: 1, power: 1.25, type: 'tactical', debuffDef: 10 },
+                    { name: 'Pit Stop Scuderia', desc: 'Troca de pneus ultra-rapida de 2.1s (+65 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 40 },
+                    { name: 'Pole Position Perfect', desc: 'Volta voadora lendaria com precisao milimetrica.', cd: 3, power: 2.1, type: 'special' }
+                ]
+            },
+            {
+                id: 'verstappen',
+                name: 'M. Verstappen',
+                number: '1',
+                team: 'Red Bull Racing',
+                color: '#3671C6',
+                category: 'top',
+                quote: 'Simply lovely pace, let’s push!',
+                atk: 58, def: 20, ini: 80, crit: 25,
+                moves: [
+                    { name: 'Ultrapassagem Agressiva', desc: 'Mergulho decisivo por dentro do apex.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Ataque Sem Espaco', desc: 'Pressiona o rival fora da linha ideal.', cd: 1, power: 1.3, type: 'tactical', debuffDef: 12 },
+                    { name: 'Gerenciamento RBR', desc: 'Ajuste de mapa de motor no volante (+50 HP, +50 Shield).', cd: 2, power: 0, type: 'support', heal: 50, shield: 50 },
+                    { name: 'Simply Lovely Pace', desc: 'Ritmo avassalador abrindo 10 segundos de vantagem.', cd: 3, power: 2.2, type: 'special' }
+                ]
+            },
+            {
+                id: 'norris',
+                name: 'L. Norris',
+                number: '4',
+                team: 'McLaren',
+                color: '#FF8000',
+                category: 'top',
+                quote: 'Papaya rules in full effect!',
+                atk: 52, def: 16, ini: 76, crit: 20,
+                moves: [
+                    { name: 'Papaya Dash', desc: 'Arrancada veloz com chassis leve.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Corte de Curva Veloz', desc: 'Aproveita zebras para ganhar tempo.', cd: 1, power: 1.2, type: 'tactical', debuffIni: 8 },
+                    { name: 'Estrategia Papaya', desc: 'Parada perfeita para pneus macios (+70 HP, +30 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 30 },
+                    { name: 'Papaya Rules Surge', desc: 'Aceleração máxima do motor Mercedes McLaren.', cd: 3, power: 2.0, type: 'special' }
+                ]
+            },
+            {
+                id: 'hamilton',
+                name: 'L. Hamilton',
+                number: '44',
+                team: 'Mercedes / Ferrari',
+                color: '#6CD3BF',
+                category: 'top',
+                quote: 'Bono, my tires are dead... just kidding!',
+                atk: 55, def: 22, ini: 75, crit: 22,
+                moves: [
+                    { name: 'Ataque do Hexa/Hepta', desc: 'Ultrapassagem experiente e calculada.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Tracado Invertido', desc: 'Linha alternativa sob frenagem pesada.', cd: 1, power: 1.25, type: 'tactical', debuffDef: 8 },
+                    { name: 'Mestre dos Pneus', desc: 'Extrai durabilidade inacreditável (+80 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 80, shield: 35 },
+                    { name: 'Hammer Time', desc: 'Sequência de voltas mais rápidas da corrida.', cd: 3, power: 2.15, type: 'special' }
+                ]
+            },
+            {
+                id: 'colapinto',
+                name: 'F. Colapinto',
+                number: '43',
+                team: 'Williams / Alpine',
+                color: '#00A0DE',
+                category: 'young',
+                quote: 'Con garra y velocidad latina!',
+                atk: 51, def: 15, ini: 74, crit: 18,
+                moves: [
+                    { name: 'Giro Latino', desc: 'Ataque veloz com arrojo sul-americano.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Frenagem Tardia', desc: 'Atrasa a freada ao maximo no hairpin.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 10 },
+                    { name: 'Ajuste de Telemetria', desc: 'Reconfiguracao do volante (+60 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 60, shield: 35 },
+                    { name: 'Garra Argentina', desc: 'Ataque sem medo pelas paredes de circuito de rua.', cd: 3, power: 1.95, type: 'special' }
+                ]
+            },
+            {
+                id: 'bortoleto',
+                name: 'G. Bortoleto',
+                number: '5',
+                team: 'Stake Sauber',
+                color: '#52E252',
+                category: 'young',
+                quote: 'Campeao calculista no grid principal!',
+                atk: 50, def: 17, ini: 73, crit: 19,
+                moves: [
+                    { name: 'Tracado Campeao', desc: 'Frenagem precisa de campeao F2/F3.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Calculo de Vacuo', desc: 'Projeção aerodinâmica para ultrapassagem.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 8 },
+                    { name: 'Box Sauber Inteligente', desc: 'Parada perfeita com otimização de consumo (+65 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 40 },
+                    { name: 'Ultrapassagem de Mestre', desc: 'Manobra dupla espetacular na primeira curva.', cd: 3, power: 1.95, type: 'special' }
+                ]
+            },
+            {
+                id: 'piastri',
+                name: 'O. Piastri',
+                number: '81',
+                team: 'McLaren',
+                color: '#FF8000',
+                category: 'top',
+                quote: 'Calm, cool, and collected.',
+                atk: 53, def: 18, ini: 75, crit: 21,
+                moves: [
+                    { name: 'Ataque Frio', desc: 'Batida de asa de DRS cirurgica.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Defesa de Posicao', desc: 'Bloqueio frio sem cometer erros.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 10 },
+                    { name: 'Calma no Radio', desc: 'Foco total sem desgaste mental (+70 HP, +30 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 30 },
+                    { name: 'Ice Cold Overtake', desc: 'Manobra sem tremular nas zebras de alta.', cd: 3, power: 2.05, type: 'special' }
+                ]
+            },
+            {
+                id: 'lawson',
+                name: 'L. Lawson',
+                number: '30',
+                team: 'RB (Racing Bulls)',
+                color: '#6692FF',
+                category: 'young',
+                quote: 'Fighting for every single meter!',
+                atk: 49, def: 16, ini: 72, crit: 17,
+                moves: [
+                    { name: 'Combate Direto', desc: 'Ataque firme roda a roda.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Pressao no Retrovisor', desc: 'Desestabiliza o adversário a frente.', cd: 1, power: 1.2, type: 'tactical', debuffIni: 10 },
+                    { name: 'Ajuste RB', desc: 'Recuperacao de energia KERS (+60 HP, +30 Shield).', cd: 2, power: 0, type: 'support', heal: 60, shield: 30 },
+                    { name: 'Ataque Sem Medo', desc: 'Dividida de curva agressiva sem aliviar o pé.', cd: 3, power: 1.9, type: 'special' }
+                ]
+            },
+            {
+                id: 'hadjar',
+                name: 'I. Hadjar',
+                number: '6',
+                team: 'RB (Racing Bulls)',
+                color: '#2B4562',
+                category: 'young',
+                quote: 'Explosive speed from day one!',
+                atk: 48, def: 15, ini: 76, crit: 18,
+                moves: [
+                    { name: 'Sprint Rapido', desc: 'Aceleracao imediata na relargada.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Corte de Linha', desc: 'Troca de direcao repentina.', cd: 1, power: 1.15, type: 'tactical', debuffDef: 8 },
+                    { name: 'Box Expresso', desc: 'Pit stop rapido de ajuste de asa (+55 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 55, shield: 35 },
+                    { name: 'Sprint Boost', desc: 'Explosao de potencia com modo ultrapassagem.', cd: 3, power: 1.88, type: 'special' }
+                ]
+            },
+            {
+                id: 'antonelli',
+                name: 'K. Antonelli',
+                number: '12',
+                team: 'Mercedes',
+                color: '#27F4D2',
+                category: 'young',
+                quote: 'Prodigy power activated!',
+                atk: 52, def: 14, ini: 79, crit: 20,
+                moves: [
+                    { name: 'Impulso Prodigio', desc: 'Aceleracao pura do jovem talento.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Ataque de Vanguarda', desc: 'Ataque ousado em alta velocidade.', cd: 1, power: 1.25, type: 'tactical', debuffDef: 10 },
+                    { name: 'Telemetria Mercedes', desc: 'Refatoracao de mapas de acelerador (+60 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 60, shield: 40 },
+                    { name: 'Turbo Prodigy', desc: 'Manobra espetacular com garra e velocidade.', cd: 3, power: 2.0, type: 'special' }
+                ]
+            },
+            {
+                id: 'russell',
+                name: 'G. Russell',
+                number: '63',
+                team: 'Mercedes',
+                color: '#6CD3BF',
+                category: 'top',
+                quote: 'Forecast shows 100% chance of pace!',
+                atk: 51, def: 20, ini: 74, crit: 18,
+                moves: [
+                    { name: 'Estrategia Calculada', desc: 'Giro limpo e constante.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Trancar a Porta', desc: 'Posicionamento perfeito de chassi.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 12 },
+                    { name: 'Estrategia Mr. Saturday', desc: 'Ajuste de asa dianteira (+70 HP, +45 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 45 },
+                    { name: 'Mr. Saturday Strategy', desc: 'Volta perfeita de classificação com vácuo ideal.', cd: 3, power: 1.95, type: 'special' }
+                ]
+            },
+            {
+                id: 'alonso',
+                name: 'F. Alonso',
+                number: '14',
+                team: 'Aston Martin',
+                color: '#229971',
+                category: 'legends',
+                quote: 'El Plan is underway!',
+                atk: 54, def: 25, ini: 71, crit: 22,
+                moves: [
+                    { name: 'Defesa de Leão', desc: 'Duelo veterano e implacável.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Truque Veterano', desc: 'Provoca desgaste desnecessario no rival.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 15 },
+                    { name: 'Mestre da Estrategia', desc: 'Gerenciamento supremo sob pressao (+75 HP, +50 Shield).', cd: 2, power: 0, type: 'support', heal: 75, shield: 50 },
+                    { name: 'El Plan Defense', desc: 'Bloqueio lendario e contra-ataque em curva rápida.', cd: 3, power: 2.0, type: 'special' }
+                ]
+            },
+            {
+                id: 'stroll',
+                name: 'L. Stroll',
+                number: '18',
+                team: 'Aston Martin',
+                color: '#229971',
+                category: 'all',
+                quote: 'Pushing through the wet surface!',
+                atk: 46, def: 18, ini: 68, crit: 15,
+                moves: [
+                    { name: 'Ataque Chuva', desc: 'Tração em pista molhada.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Frenagem Pesada', desc: 'Atraso em pista escorregadia.', cd: 1, power: 1.15, type: 'tactical', debuffIni: 8 },
+                    { name: 'Troca de Pneus Inter', desc: 'Ajuste para clima adverso (+65 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 35 },
+                    { name: 'Wet Weather Shield', desc: 'Escudo e impulso sob tempestade.', cd: 3, power: 1.8, type: 'special' }
+                ]
+            },
+            {
+                id: 'albon',
+                name: 'A. Albon',
+                number: '23',
+                team: 'Williams',
+                color: '#005AFF',
+                category: 'all',
+                quote: 'Extending this stint forever!',
+                atk: 49, def: 21, ini: 72, crit: 17,
+                moves: [
+                    { name: 'Escalada de Posições', desc: 'Gaining momentum lap by lap.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Gerenciamento de Desgaste', desc: 'Reduz o consumo do carro.', cd: 1, power: 1.18, type: 'tactical', debuffDef: 8 },
+                    { name: 'Stint Gigante Williams', desc: '50 voltas com o mesmo jogo de pneus (+80 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 80, shield: 40 },
+                    { name: 'Tire Whisperer Drive', desc: 'Ataque surpresa no final da prova com pneus conservados.', cd: 3, power: 1.9, type: 'special' }
+                ]
+            },
+            {
+                id: 'sainz',
+                name: 'C. Sainz',
+                number: '55',
+                team: 'Williams / Ferrari',
+                color: '#E8002D',
+                category: 'top',
+                quote: 'Smooth operator operating!',
+                atk: 52, def: 19, ini: 74, crit: 20,
+                moves: [
+                    { name: 'Operacao Suave', desc: 'Ultrapassagem limpa no apex.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Inversao Tática', desc: 'Mudança de linha calculada.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 10 },
+                    { name: 'Stop Tático Suave', desc: 'Parada perfeita e ajuste de diferencial (+70 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 40 },
+                    { name: 'Smooth Operator', desc: 'Ataque magistral com estratégia própria pelo rádio.', cd: 3, power: 2.0, type: 'special' }
+                ]
+            },
+            {
+                id: 'hulkenberg',
+                name: 'N. Hulkenberg',
+                number: '27',
+                team: 'Haas / Sauber',
+                color: '#B6BABD',
+                category: 'all',
+                quote: 'Solid qualifying mode on!',
+                atk: 48, def: 19, ini: 73, crit: 18,
+                moves: [
+                    { name: 'Volta Consistente', desc: 'Ritmo preciso sem cometer deslizes.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Pressao de Grid', desc: 'Defesa solida em brigas do meio de tabela.', cd: 1, power: 1.18, type: 'tactical', debuffDef: 8 },
+                    { name: 'Ajuste Haas/Sauber', desc: 'Pit stop sem erros (+65 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 35 },
+                    { name: 'Qualy Specialist', desc: 'Extrai 100% da aderência em volta unica.', cd: 3, power: 1.88, type: 'special' }
+                ]
+            },
+            {
+                id: 'perez',
+                name: 'S. Perez',
+                number: '11',
+                team: 'Red Bull Racing',
+                color: '#3671C6',
+                category: 'all',
+                quote: 'Minister of Defense on track!',
+                atk: 50, def: 24, ini: 70, crit: 18,
+                moves: [
+                    { name: 'Trilhado de Rua', desc: 'Trifilagem precisa entre os muros.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Bloqueio de Checo', desc: 'Fechamento perfeito de porta.', cd: 1, power: 1.2, type: 'tactical', debuffIni: 10 },
+                    { name: 'Estrategia de Defesa', desc: 'Protecao total de chassi e regeneracao (+70 HP, +50 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 50 },
+                    { name: 'Minister of Defense', desc: 'Defesa titanica segurando o rival por varias voltas.', cd: 3, power: 1.92, type: 'special' }
+                ]
+            },
+            {
+                id: 'bottas',
+                name: 'V. Bottas',
+                number: '77',
+                team: 'Stake Sauber',
+                color: '#52E252',
+                category: 'all',
+                quote: 'To whom it may concern... full send!',
+                atk: 49, def: 17, ini: 75, crit: 18,
+                moves: [
+                    { name: 'Disparo de Reta', desc: 'Aceleracao limpa com motor ajustado.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Vácuo Finlandes', desc: 'Aproveitamento de esteira de ar.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 10 },
+                    { name: 'Sauna Pit Reset', desc: 'Recuperacao e foco total (+65 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 35 },
+                    { name: 'Valtteri Rocket', desc: 'Disparo supersonico nas retas de alta.', cd: 3, power: 1.9, type: 'special' }
+                ]
+            },
+            {
+                id: 'camara',
+                name: 'Rafa Camara',
+                number: '37',
+                team: 'Ferrari Driver Academy',
+                color: '#DC0000',
+                category: 'young',
+                quote: 'Promessa brasileira rumo ao topo!',
+                atk: 48, def: 14, ini: 77, crit: 19,
+                moves: [
+                    { name: 'Impulso de Base', desc: 'Aceleracao ousada da academia.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Ataque Jovem', desc: 'Manobra rapida na entrada da chicane.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 8 },
+                    { name: 'Ajuste de Telemetria FDA', desc: 'Treino intensivo de dados (+60 HP, +30 Shield).', cd: 2, power: 0, type: 'support', heal: 60, shield: 30 },
+                    { name: 'Ferrari Junior Spark', desc: 'Faísca de talento com aceleração total.', cd: 3, power: 1.88, type: 'special' }
+                ]
+            },
+            {
+                id: 'gasly',
+                name: 'P. Gasly',
+                number: '10',
+                team: 'Alpine',
+                color: '#0093CC',
+                category: 'all',
+                quote: 'WHAT DID WE JUST DO?!',
+                atk: 50, def: 18, ini: 73, crit: 19,
+                moves: [
+                    { name: 'Resiliencia Alpine', desc: 'Ataque com determinação.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Contra-Ataque de Monza', desc: 'Frenagem arrojada.', cd: 1, power: 1.2, type: 'tactical', debuffDef: 10 },
+                    { name: 'Box Francês', desc: 'Ajuste completo de aerodinamica (+65 HP, +35 Shield).', cd: 2, power: 0, type: 'support', heal: 65, shield: 35 },
+                    { name: 'Monza Winner Spirit', desc: 'Espírito vitorioso de Monza com garra inabalável.', cd: 3, power: 1.95, type: 'special' }
+                ]
+            },
+            {
+                id: 'raikkonen',
+                name: 'K. Räikkönen',
+                number: '7',
+                team: 'Iceman Legend',
+                color: '#70D6FF',
+                category: 'legends',
+                quote: 'Leave me alone, I know what I am doing!',
+                atk: 56, def: 21, ini: 74, crit: 24,
+                moves: [
+                    { name: 'Giro Sem Conversa', desc: 'Golpe direto sem rádio.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Ataque Congelante', desc: 'Manobra fria nas zebras.', cd: 1, power: 1.25, type: 'tactical', debuffDef: 12 },
+                    { name: 'Drink Button Reset', desc: 'Recuperacao fria de energia (+70 HP, +40 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 40 },
+                    { name: 'Leave Me Alone Mode', desc: 'Foco lendário e aceleração máxima sem distração.', cd: 3, power: 2.1, type: 'special' }
+                ]
+            },
+            {
+                id: 'schumacher',
+                name: 'M. Schumacher',
+                number: '7',
+                team: 'Kaiser Legend',
+                color: '#FF1801',
+                category: 'legends',
+                quote: '7 World Titles of pure perfection!',
+                atk: 59, def: 23, ini: 79, crit: 26,
+                moves: [
+                    { name: 'Dominio do Kaiser', desc: 'Aceleração lendaria e implacável.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Voltas de Qualificacao', desc: 'Sequência de setor roxo.', cd: 1, power: 1.3, type: 'tactical', debuffDef: 12 },
+                    { name: 'Estrategia Brawn/Kaiser', desc: 'Estratégia lendária de pit stop (+75 HP, +45 Shield).', cd: 2, power: 0, type: 'support', heal: 75, shield: 45 },
+                    { name: 'Kaiser Dominance', desc: 'Supremacia absoluta dos 7 títulos mundiais.', cd: 3, power: 2.25, type: 'special' }
+                ]
+            },
+            {
+                id: 'senna',
+                name: 'A. Senna',
+                number: '12',
+                team: 'McLaren Legend',
+                color: '#FFD700',
+                category: 'legends',
+                quote: 'Se você não tenta a brecha, não é piloto!',
+                atk: 60, def: 20, ini: 82, crit: 28,
+                moves: [
+                    { name: 'Mágica de Donington', desc: 'Ultrapassagem lendaria na chuva.', cd: 0, power: 1.0, type: 'basic' },
+                    { name: 'Busca do Limite', desc: 'Procura o milímetro de aderência no apex.', cd: 1, power: 1.35, type: 'tactical', debuffDef: 15 },
+                    { name: 'Foco Divino', desc: 'Concentração transcendental no cockpit (+70 HP, +50 Shield).', cd: 2, power: 0, type: 'support', heal: 70, shield: 50 },
+                    { name: 'Rain Master Magic', desc: 'Magia suprema do Rei da Chuva e das Poles.', cd: 3, power: 2.3, type: 'special' }
+                ]
+            }
+        ];
+
+
+        /* ==========================================================================
+           3. SVG AVATAR GENERATOR (100% Offline Crisp Visuals)
+           ========================================================================== */
+        function generateDriverAvatarSVG(driver) {
+            return `
+            <svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">
+                <rect width="100" height="100" rx="16" fill="#0d0f14"/>
+                <circle cx="50" cy="50" r="42" fill="${driver.color}" opacity="0.2"/>
+                <!-- Helmet Base -->
+                <path d="M 25 55 C 25 30, 75 30, 75 55 C 75 70, 65 80, 50 80 C 35 80, 25 70, 25 55 Z" fill="${driver.color}"/>
+                <!-- Visor -->
+                <path d="M 30 45 C 30 40, 70 40, 70 45 L 68 58 C 68 60, 32 60, 32 58 Z" fill="#0b0e14" stroke="#ffffff" stroke-width="1.5" opacity="0.9"/>
+                <!-- Visor Reflection -->
+                <path d="M 35 47 L 55 47 L 45 54 L 33 54 Z" fill="#ffffff" opacity="0.3"/>
+                <!-- Driver Number Badge -->
+                <rect x="36" y="66" width="28" height="16" rx="4" fill="#000000" opacity="0.8"/>
+                <text x="50" y="78" font-family="'Orbitron', sans-serif" font-weight="900" font-size="11" fill="#ffffff" text-anchor="middle">#${driver.number}</text>
+            </svg>
+            `;
+        }
+
+
+        /* ==========================================================================
+           4. GAME STATE ENGINE
+           ========================================================================== */
+        class F1GameEngine {
+            constructor() {
+                this.mode = 'pvp'; // 'pvp' or 'pve'
+                this.p1Driver = null;
+                this.p2Driver = null;
+                
+                // Active State during battle
+                this.p1 = null; // { data, hp, maxHp: 500, shield, ers, cds: [0,0,0,0], status: [] }
+                this.p2 = null;
+                
+                this.currentTurn = 'p1'; // 'p1' or 'p2'
+                this.lap = 1;
+                this.maxLaps = 15;
+                this.inBattle = false;
+                this.isAttacking = false;
+
+                // Match stats
+                this.stats = {
+                    totalDamage: 0,
+                    crits: 0,
+                    pitStops: 0,
+                    laps: 1
+                };
+            }
+
+            goHome() {
+                this.inBattle = false;
+                document.getElementById('screen-start').classList.remove('hidden');
+                document.getElementById('screen-select').classList.add('hidden');
+                document.getElementById('screen-battle').classList.add('hidden');
+                document.getElementById('screen-podium').classList.add('hidden');
+            }
+
+            showRules() {
+                document.getElementById('modal-rules').classList.remove('hidden');
+            }
+
+            hideRules() {
+                document.getElementById('modal-rules').classList.add('hidden');
+            }
+
+            startSelection(mode) {
+                this.mode = mode;
+                this.p1Driver = null;
+                this.p2Driver = null;
+
+                document.getElementById('screen-start').classList.add('hidden');
+                document.getElementById('screen-select').classList.remove('hidden');
+                document.getElementById('screen-battle').classList.add('hidden');
+                document.getElementById('screen-podium').classList.add('hidden');
+
+                document.getElementById('select-title').innerText = mode === 'pvp' ? 'SELEÇÃO MULTIPLAYER (1v1)' : 'TREINO CONTRA IA';
+                document.getElementById('select-subtitle').innerText = 'Jogador 1: Escolha o seu piloto no Grid abaixo';
+
+                this.renderGrid(DRIVERS_DATA);
+                this.updatePreview();
+            }
+
+            filterDrivers(cat) {
+                // Update active tab styles
+                const btns = document.querySelectorAll('.driver-filter-btn');
+                btns.forEach(b => {
+                    b.classList.remove('bg-f1red', 'text-white');
+                    b.classList.add('bg-slate-800', 'text-slate-300');
+                });
+                event.target.classList.remove('bg-slate-800', 'text-slate-300');
+                event.target.classList.add('bg-f1red', 'text-white');
+
+                if (cat === 'all') {
+                    this.renderGrid(DRIVERS_DATA);
+                } else {
+                    const filtered = DRIVERS_DATA.filter(d => d.category === cat);
+                    this.renderGrid(filtered);
+                }
+            }
+
+            renderGrid(list) {
+                const grid = document.getElementById('drivers-grid');
+                grid.innerHTML = '';
+
+                list.forEach(driver => {
+                    const isSelectedP1 = this.p1Driver && this.p1Driver.id === driver.id;
+                    const isSelectedP2 = this.p2Driver && this.p2Driver.id === driver.id;
+
+                    const card = document.createElement('div');
+                    card.className = `bg-f1card border-2 ${isSelectedP1 ? 'border-f1red shadow-f1red/50' : isSelectedP2 ? 'border-blue-500 shadow-blue-500/50' : 'border-f1border hover:border-slate-400'} rounded-xl p-2.5 cursor-pointer transition flex flex-col justify-between group relative overflow-hidden`;
+                    
+                    card.onclick = () => this.selectDriver(driver);
+
+                    card.innerHTML = `
+                        <div class="absolute top-0 left-0 right-0 h-1" style="background-color: ${driver.color}"></div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                                ${generateDriverAvatarSVG(driver)}
+                            </div>
+                            <div class="overflow-hidden">
+                                <h4 class="font-orbitron font-bold text-white text-xs truncate group-hover:text-f1red transition">${driver.name}</h4>
+                                <span class="text-[10px] text-slate-400 block truncate">${driver.team}</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-1 mt-2 text-[10px] font-mono text-slate-300 bg-slate-900/60 p-1.5 rounded">
+                            <div>ATK: <b>${driver.atk}</b></div>
+                            <div>DEF: <b>${driver.def}%</b></div>
+                            <div>INI: <b>${driver.ini}</b></div>
+                            <div>CRIT: <b>${driver.crit}%</b></div>
+                        </div>
+
+                        <div class="mt-2 text-[9px] text-slate-400 italic line-clamp-1">
+                            "${driver.quote}"
+                        </div>
+                    `;
+
+                    grid.appendChild(card);
+                });
+            }
+
+            selectDriver(driver) {
+                audioManager.playBeep(520, 'sine', 0.1, 0.1);
+
+                if (!this.p1Driver) {
+                    this.p1Driver = driver;
+                    if (this.mode === 'pve') {
+                        // Pick random AI driver different from P1
+                        const remaining = DRIVERS_DATA.filter(d => d.id !== driver.id);
+                        this.p2Driver = remaining[Math.floor(Math.random() * remaining.length)];
+                    } else {
+                        document.getElementById('select-subtitle').innerText = 'Jogador 2: Escolha seu piloto adversário';
+                    }
+                } else if (this.mode === 'pvp' && !this.p2Driver) {
+                    if (driver.id === this.p1Driver.id) return; // Cannot pick same
+                    this.p2Driver = driver;
+                } else {
+                    // Reset selection
+                    this.p1Driver = driver;
+                    this.p2Driver = null;
+                    if (this.mode === 'pve') {
+                        const remaining = DRIVERS_DATA.filter(d => d.id !== driver.id);
+                        this.p2Driver = remaining[Math.floor(Math.random() * remaining.length)];
+                    } else {
+                        document.getElementById('select-subtitle').innerText = 'Jogador 2: Escolha seu piloto adversário';
+                    }
+                }
+
+                this.renderGrid(DRIVERS_DATA);
+                this.updatePreview();
+            }
+
+            updatePreview() {
+                const btn = document.getElementById('btn-start-race');
+
+                if (this.p1Driver) {
+                    document.getElementById('p1-preview').innerHTML = `
+                        <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700 overflow-hidden">
+                            ${generateDriverAvatarSVG(this.p1Driver)}
+                        </div>
+                        <div class="overflow-hidden">
+                            <span class="text-[10px] text-f1red font-bold uppercase">Piloto 1</span>
+                            <h4 class="font-orbitron font-bold text-white truncate text-sm">${this.p1Driver.name}</h4>
+                            <p class="text-[11px] text-slate-400 truncate">HP: 500 | ATK: ${this.p1Driver.atk} | INI: ${this.p1Driver.ini}</p>
+                        </div>
+                    `;
+                }
+
+                if (this.p2Driver) {
+                    document.getElementById('p2-preview').innerHTML = `
+                        <div class="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center border border-slate-700 overflow-hidden">
+                            ${generateDriverAvatarSVG(this.p2Driver)}
+                        </div>
+                        <div class="overflow-hidden">
+                            <span class="text-[10px] text-blue-400 font-bold uppercase">${this.mode === 'pve' ? 'IA Treinadora' : 'Piloto 2'}</span>
+                            <h4 class="font-orbitron font-bold text-white truncate text-sm">${this.p2Driver.name}</h4>
+                            <p class="text-[11px] text-slate-400 truncate">HP: 500 | ATK: ${this.p2Driver.atk} | INI: ${this.p2Driver.ini}</p>
+                        </div>
+                    `;
+                }
+
+                if (this.p1Driver && this.p2Driver) {
+                    btn.disabled = false;
+                    btn.className = 'w-full py-3 px-6 rounded-xl font-orbitron font-black text-sm uppercase tracking-wider bg-f1red hover:bg-red-700 text-white cursor-pointer transition shadow-lg shadow-f1red/30 animate-pulse';
+                    btn.innerText = '🏎️ LARGAR / INICIAR BATTALHA';
+                } else {
+                    btn.disabled = true;
+                    btn.className = 'w-full py-3 px-6 rounded-xl font-orbitron font-black text-sm uppercase tracking-wider bg-slate-800 text-slate-500 cursor-not-allowed transition shadow-lg';
+                    btn.innerText = 'AGUARDANDO SELEÇÃO';
+                }
+            }
+
+            confirmSelection() {
+                if (!this.p1Driver || !this.p2Driver) return;
+                this.setupBattle();
+            }
+
+            setupBattle() {
+                this.inBattle = true;
+                this.isAttacking = false;
+                this.lap = 1;
+                this.stats = { totalDamage: 0, crits: 0, pitStops: 0, laps: 1 };
+
+                // Initialize Driver States (STRICTLY 500 BASE HP)
+                this.p1 = {
+                    data: this.p1Driver,
+                    hp: 500,
+                    maxHp: 500,
+                    shield: 0,
+                    ers: 0,
+                    cds: [0, 0, 0, 0],
+                    status: []
+                };
+
+                this.p2 = {
+                    data: this.p2Driver,
+                    hp: 500,
+                    maxHp: 500,
+                    shield: 0,
+                    ers: 0,
+                    cds: [0, 0, 0, 0],
+                    status: []
+                };
+
+                // Determine First Turn based on Initiative
+                if (this.p1.data.ini >= this.p2.data.ini) {
+                    this.currentTurn = 'p1';
+                } else {
+                    this.currentTurn = 'p2';
+                }
+
+                document.getElementById('screen-select').classList.add('hidden');
+                document.getElementById('screen-battle').classList.remove('hidden');
+
+                this.renderBattleUI();
+                this.clearTelemetryLog();
+                this.logTelemetry(`🏎️ GP iniciado! ${this.p1.data.name} vs ${this.p2.data.name}.`, 'system');
+
+                this.runStartLightsSequence();
+            }
+
+            runStartLightsSequence() {
+                const lights = document.querySelectorAll('#lights-row div');
+                const text = document.getElementById('start-lights-text');
+                const box = document.getElementById('start-lights-box');
+
+                box.classList.remove('hidden');
+                lights.forEach(l => l.className = 'w-6 h-6 rounded-full light-off border border-slate-700');
+                text.innerText = 'PREPAREM SEUS MOTORES...';
+
+                let count = 0;
+                const interval = setInterval(() => {
+                    if (count < 5) {
+                        lights[count].className = 'w-6 h-6 rounded-full light-on border border-red-500';
+                        audioManager.playStartLightBeep(false);
+                        count++;
+                    } else {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            lights.forEach(l => l.className = 'w-6 h-6 rounded-full light-go border border-emerald-400');
+                            text.innerText = 'LIGHTS OUT AND AWAY WE GO!';
+                            audioManager.playStartLightBeep(true);
+                            audioManager.playEngineRev();
+
+                            setTimeout(() => {
+                                box.classList.add('hidden');
+                                this.startTurn();
+                            }, 1200);
+                        }, 800);
+                    }
+                }, 600);
+            }
+
+            renderBattleUI() {
+                // Render P1 Box
+                document.getElementById('p1-name').innerText = this.p1.data.name;
+                document.getElementById('p1-team').innerText = `${this.p1.data.team} #${this.p1.data.number}`;
+                document.getElementById('p1-accent-bar').style.backgroundColor = this.p1.data.color;
+                document.getElementById('p1-avatar-box').innerHTML = generateDriverAvatarSVG(this.p1.data);
+                document.getElementById('p1-stat-atk').innerText = this.p1.data.atk;
+                document.getElementById('p1-stat-def').innerText = `${this.p1.data.def}%`;
+                document.getElementById('p1-stat-ini').innerText = this.p1.data.ini;
+
+                // Render P2 Box
+                document.getElementById('p2-name').innerText = this.p2.data.name;
+                document.getElementById('p2-team').innerText = `${this.p2.data.team} #${this.p2.data.number}`;
+                document.getElementById('p2-accent-bar').style.backgroundColor = this.p2.data.color;
+                document.getElementById('p2-avatar-box').innerHTML = generateDriverAvatarSVG(this.p2.data);
+                document.getElementById('p2-stat-atk').innerText = this.p2.data.atk;
+                document.getElementById('p2-stat-def').innerText = `${this.p2.data.def}%`;
+                document.getElementById('p2-stat-ini').innerText = this.p2.data.ini;
+
+                this.updateHPAverage();
+            }
+
+            updateHPAverage() {
+                // P1 Bars
+                const p1HpPct = Math.max(0, (this.p1.hp / this.p1.maxHp) * 100);
+                document.getElementById('p1-hp-bar').style.width = `${p1HpPct}%`;
+                document.getElementById('p1-hp-text').innerText = `${Math.ceil(this.p1.hp)} / ${this.p1.maxHp}`;
+                document.getElementById('p1-shield-bar').style.width = `${Math.min(100, this.p1.shield)}%`;
+                document.getElementById('p1-shield-text').innerText = `${Math.ceil(this.p1.shield)} SHIELD`;
+                document.getElementById('p1-ers-bar').style.width = `${this.p1.ers}%`;
+                document.getElementById('p1-ers-text').innerText = `${this.p1.ers}%`;
+
+                // P2 Bars
+                const p2HpPct = Math.max(0, (this.p2.hp / this.p2.maxHp) * 100);
+                document.getElementById('p2-hp-bar').style.width = `${p2HpPct}%`;
+                document.getElementById('p2-hp-text').innerText = `${Math.ceil(this.p2.hp)} / ${this.p2.maxHp}`;
+                document.getElementById('p2-shield-bar').style.width = `${Math.min(100, this.p2.shield)}%`;
+                document.getElementById('p2-shield-text').innerText = `${Math.ceil(this.p2.shield)} SHIELD`;
+                document.getElementById('p2-ers-bar').style.width = `${this.p2.ers}%`;
+                document.getElementById('p2-ers-text').innerText = `${this.p2.ers}%`;
+
+                // Status Badges
+                this.renderStatusBadges('p1-status-container', this.p1.status);
+                this.renderStatusBadges('p2-status-container', this.p2.status);
+
+                document.getElementById('lap-counter').innerText = `${this.lap} / ${this.maxLaps}`;
+            }
+
+            renderStatusBadges(containerId, statusList) {
+                const el = document.getElementById(containerId);
+                el.innerHTML = '';
+                statusList.forEach(s => {
+                    const badge = document.createElement('span');
+                    badge.className = 'text-[9px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                    badge.innerText = `${s.name} (${s.turns}T)`;
+                    el.appendChild(badge);
+                });
+            }
+
+            startTurn() {
+                if (!this.inBattle) return;
+
+                const activeDriver = this.currentTurn === 'p1' ? this.p1 : this.p2;
+                const activeName = activeDriver.data.name;
+
+                document.getElementById('active-turn-indicator').innerText = activeName;
+                document.getElementById('turn-action-prompt').innerText = `⚡ TURNO DE ${activeName.toUpperCase()} - ESCOLHA A MANOBRA`;
+
+                // Highlight active cockpit border
+                document.getElementById('p1-cockpit').style.borderColor = this.currentTurn === 'p1' ? '#e10600' : '#2A303C';
+                document.getElementById('p2-cockpit').style.borderColor = this.currentTurn === 'p2' ? '#3b82f6' : '#2A303C';
+
+                // Reduce Cooldowns for Active Driver
+                for (let i = 0; i < activeDriver.cds.length; i++) {
+                    if (activeDriver.cds[i] > 0) activeDriver.cds[i]--;
+                }
+
+                // Process Status Effects
+                activeDriver.status.forEach(s => s.turns--);
+                activeDriver.status = activeDriver.status.filter(s => s.turns > 0);
+
+                this.updateHPAverage();
+                this.updateActionButtons();
+
+                // If PvE and P2 turn -> AI play
+                if (this.mode === 'pve' && this.currentTurn === 'p2') {
+                    this.disableActionButtons();
+                    setTimeout(() => this.executeAIAction(), 1000);
+                }
+            }
+
+            updateActionButtons() {
+                const activeDriver = this.currentTurn === 'p1' ? this.p1 : this.p2;
+
+                activeDriver.data.moves.forEach((move, idx) => {
+                    const btn = document.getElementById(`btn-atk-${idx + 1}`);
+                    const title = document.getElementById(`atk-${idx + 1}-title`);
+                    const desc = document.getElementById(`atk-${idx + 1}-desc`);
+
+                    title.innerText = move.name;
+                    desc.innerText = move.desc;
+
+                    const cdLeft = activeDriver.cds[idx];
+                    btn.disabled = cdLeft > 0 || this.isAttacking;
+
+                    if (idx > 0) {
+                        const cdLabel = document.getElementById(`atk-${idx + 1}-cd`);
+                        if (cdLeft > 0) {
+                            cdLabel.innerText = `CD: ${cdLeft}T`;
+                            cdLabel.className = 'text-xs font-bold text-red-400';
+                        } else {
+                            cdLabel.innerText = 'Pronto';
+                            cdLabel.className = 'text-xs font-bold text-emerald-400';
+                        }
+                    }
+                });
+            }
+
+            disableActionButtons() {
+                for (let i = 1; i <= 4; i++) {
+                    document.getElementById(`btn-atk-${i}`).disabled = true;
+                }
+            }
+
+            executeAttack(moveIdx) {
+                if (this.isAttacking || !this.inBattle) return;
+                this.isAttacking = true;
+                this.disableActionButtons();
+
+                const attacker = this.currentTurn === 'p1' ? this.p1 : this.p2;
+                const defender = this.currentTurn === 'p1' ? this.p2 : this.p1;
+                const move = attacker.data.moves[moveIdx];
+
+                // Set Cooldown
+                attacker.cds[moveIdx] = move.cd > 0 ? move.cd + 1 : 0;
+
+                // ERS gain on Basic Attack 1
+                if (moveIdx === 0) {
+                    attacker.ers = Math.min(100, attacker.ers + 25);
+                }
+
+                // Check ERS Bonus (Consume at 100%)
+                let ersMultiplier = 1.0;
+                if (attacker.ers >= 100) {
+                    ersMultiplier = 1.35;
+                    attacker.ers = 0;
+                    this.logTelemetry(`⚡ ${attacker.data.name} descarregou 100% de ERS KERS! (+35% Dano)`, 'boost');
+                }
+
+                // Visual Animation Effect
+                audioManager.playImpact(false);
+                const defenderBox = document.getElementById(this.currentTurn === 'p1' ? 'p2-cockpit' : 'p1-cockpit');
+                defenderBox.classList.add('shake');
+                setTimeout(() => defenderBox.classList.remove('shake'), 400);
+
+                if (move.type === 'support') {
+                    // Support / Pit Stop Action
+                    audioManager.playPitStop();
+                    const healAmt = move.heal || 60;
+                    const shieldAmt = move.shield || 40;
+
+                    attacker.hp = Math.min(attacker.maxHp, attacker.hp + healAmt);
+                    attacker.shield += shieldAmt;
+                    this.stats.pitStops++;
+
+                    this.showDamagePop(this.currentTurn === 'p1' ? 'p1-cockpit' : 'p2-cockpit', `+${healAmt} HP`, 'text-emerald-400');
+                    this.logTelemetry(`🛠️ ${attacker.data.name} executou ${move.name}! Recarga de +${healAmt} HP e +${shieldAmt} Escudo.`, 'heal');
+
+                } else {
+                    // Attack Action Calculation
+                    let baseDmg = attacker.data.atk * move.power * ersMultiplier;
+                    
+                    // Critical Check
+                    const isCrit = (Math.random() * 100) < attacker.data.crit;
+                    if (isCrit) {
+                        baseDmg *= 1.8;
+                        this.stats.crits++;
+                        audioManager.playImpact(true);
+                    }
+
+                    // Defense mitigation
+                    let defPercent = defender.data.def;
+                    defender.status.forEach(s => {
+                        if (s.debuffDef) defPercent = Math.max(0, defPercent - s.debuffDef);
+                    });
+
+                    let finalDmg = baseDmg * (1 - (defPercent / 100));
+
+                    // Shield absorbs damage first
+                    if (defender.shield > 0) {
+                        if (defender.shield >= finalDmg) {
+                            defender.shield -= finalDmg;
+                            finalDmg = 0;
+                        } else {
+                            finalDmg -= defender.shield;
+                            defender.shield = 0;
+                        }
+                    }
+
+                    defender.hp = Math.max(0, defender.hp - finalDmg);
+                    this.stats.totalDamage += Math.ceil(finalDmg);
+
+                    // Debuff status application
+                    if (move.debuffDef) {
+                        defender.status.push({ name: 'Frenagem Prejudicada', turns: 2, debuffDef: move.debuffDef });
+                    }
+
+                    // Floating Damage Popup
+                    const popColor = isCrit ? 'text-yellow-400 text-2xl' : 'text-f1red text-xl';
+                    const popText = isCrit ? `CRÍTICO! -${Math.ceil(finalDmg)}` : `-${Math.ceil(finalDmg)}`;
+                    this.showDamagePop(this.currentTurn === 'p1' ? 'p2-cockpit' : 'p1-cockpit', popText, popColor);
+
+                    // Telemetry Log
+                    const critLabel = isCrit ? '💥 CRÍTICO! ' : '';
+                    this.logTelemetry(`🏁 ${critLabel}${attacker.data.name} usou [${move.name}] causando ${Math.ceil(finalDmg)} de dano em ${defender.data.name}.`, isCrit ? 'crit' : 'attack');
+                }
+
+                this.updateHPAverage();
+
+                // Check Knockout Victory
+                if (defender.hp <= 0) {
+                    setTimeout(() => this.finishMatch(attacker), 800);
+                    return;
+                }
+
+                // Switch Turn
+                setTimeout(() => {
+                    this.isAttacking = false;
+                    this.currentTurn = this.currentTurn === 'p1' ? 'p2' : 'p1';
+                    if (this.currentTurn === 'p1') {
+                        this.lap++;
+                        this.stats.laps = this.lap;
+                    }
+                    this.startTurn();
+                }, 900);
+            }
+
+            executeAIAction() {
+                if (!this.inBattle) return;
+                const ai = this.p2;
+
+                // AI Decision logic: Heal if HP low (<35%), else use Special if ready, else random valid
+                let chosenIdx = 0;
+                if (ai.hp < 180 && ai.cds[2] === 0) {
+                    chosenIdx = 2; // Pit Stop
+                } else if (ai.cds[3] === 0) {
+                    chosenIdx = 3; // Ultimate Special
+                } else if (ai.cds[1] === 0 && Math.random() > 0.4) {
+                    chosenIdx = 1; // Tactical
+                } else {
+                    chosenIdx = 0; // Basic
+                }
+
+                this.executeAttack(chosenIdx);
+            }
+
+            showDamagePop(containerId, text, colorClass) {
+                const box = document.getElementById(containerId);
+                const pop = document.createElement('div');
+                pop.className = `damage-popup ${colorClass}`;
+                pop.innerText = text;
+                pop.style.left = '40%';
+                pop.style.top = '30%';
+                box.appendChild(pop);
+
+                setTimeout(() => pop.remove(), 1000);
+            }
+
+            logTelemetry(msg, type = 'normal') {
+                const log = document.getElementById('telemetry-log');
+                const item = document.createElement('div');
+
+                let borderStyle = 'border-slate-800 text-slate-300';
+                if (type === 'attack') borderStyle = 'border-f1red/40 bg-f1red/10 text-slate-100';
+                if (type === 'crit') borderStyle = 'border-yellow-500/50 bg-yellow-500/10 text-yellow-300 font-bold';
+                if (type === 'heal') borderStyle = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300';
+                if (type === 'boost') borderStyle = 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300';
+
+                item.className = `p-2 rounded border ${borderStyle} text-[11px] transition animate-fade-in`;
+                item.innerText = msg;
+                log.appendChild(item);
+                log.scrollTop = log.scrollHeight;
+            }
+
+            clearTelemetryLog() {
+                document.getElementById('telemetry-log').innerHTML = '';
+            }
+
+            finishMatch(winner) {
+                this.inBattle = false;
+                audioManager.playVictory();
+
+                document.getElementById('winner-name').innerText = `${winner.data.name.toUpperCase()} VENCEU!`;
+                document.getElementById('winner-team').innerText = `${winner.data.team} • Vitoria em GP por Turnos`;
+                document.getElementById('stat-laps').innerText = this.lap;
+                document.getElementById('stat-damage').innerText = this.stats.totalDamage;
+                document.getElementById('stat-crits').innerText = this.stats.crits;
+                document.getElementById('stat-pits').innerText = this.stats.pitStops;
+
+                document.getElementById('screen-battle').classList.add('hidden');
+                document.getElementById('screen-podium').classList.remove('hidden');
+            }
+
+            rematch() {
+                this.setupBattle();
+            }
+        }
+
+        // Initialize Global Game Instance
+        const game = new F1GameEngine();
+    </script>
+</body>
+</html>
