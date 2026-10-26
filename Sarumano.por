@@ -1,17 +1,16 @@
 programa {
   funcao inicio() {
-    real preco, custo, quantidade, bombas,qbombas
+    inteiro preco, custo, quantidade, bombas,qbombas
     escreva("Quantos shows você vai fazer: ")
     leia (quantidade)
-    preco= 20
+    escreva("Quanto custa cada bomba: ")
+    leia(preco)
     bombas=7
     custo = quantidade*bombas*preco
     qbombas=bombas * quantidade
     escreva("O valor total será de: "+custo)
-    escreva(" Saindo R$" + preco)
-    escreva(" Cada uma")
-    escreva("\nE você vai precisar de " + qbombas)
-    escreva("bombas")
+    escreva("\n E " + qbombas)
+    escreva(" bombas")
     
   }
 }
