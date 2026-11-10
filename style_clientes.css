@@ -1,0 +1,7 @@
+.tabela-cliente {
+    background-color: rgb(255, 111, 0);
+}
+
+th, tr ,td{
+    border:solid 1px;
+}
